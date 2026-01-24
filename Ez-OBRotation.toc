@@ -6,6 +6,8 @@
 ## IconTexture: Interface\AddOns\Ez-OBRotation\Ez-OBRotation.jpg
 ## SavedVariables: EzOBR_Config
 ## X-Wago-ID: kGryylKy
+## X-Curse-Project-ID: 1443163
 
 
 Ez-OBRotation.lua
+
