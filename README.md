@@ -2,6 +2,8 @@
 
 **Ez OBRotation** is a lightweight World of Warcraft utility designed to bridge the gap between "One Button Rotation" (OBR) setups and your muscle memory. While standard OBR tell you *what* to press, it hides the actual keybind associated with that action. 
 
+Just drop the one button rotation icon to one of your bar, ideally bar 6 or 7 that you do not use, increase the size and from there, you will see the spell icon and keybind showing up. It works both with Blizzard standard UI and Bartender4. 
+
 This addon dynamically pulls your current keybinds and overlays them directly onto your OBR buttons, ensuring you never have to guess which key is mapped to your next move.
 
 ## 🚀 Features
