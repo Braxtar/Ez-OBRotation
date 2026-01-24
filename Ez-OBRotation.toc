@@ -1,7 +1,7 @@
 ## Interface: 120000
 ## Title: Ez-OB Rotation
 ## Notes: One Button Rotation with keybinds
-## Author: You
+## Author: Braxtar
 ## Version: 2.0
 ## IconTexture: Interface\AddOns\Ez-OBRotation\Ez-OBRotation.jpg
 ## SavedVariables: EzOBR_Config
@@ -10,5 +10,6 @@
 
 
 Ez-OBRotation.lua
+
 
 
