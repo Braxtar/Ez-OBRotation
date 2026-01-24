@@ -1,2 +1,0 @@
-# Ez-OBRotation
-OBRotation keybinds
