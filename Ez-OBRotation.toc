@@ -5,5 +5,7 @@
 ## Version: 2.0
 ## IconTexture: Interface\AddOns\Ez-OBRotation\Ez-OBRotation.jpg
 ## SavedVariables: EzOBR_Config
+## X-Wago-ID: kGryylKy
+
 
 Ez-OBRotation.lua
