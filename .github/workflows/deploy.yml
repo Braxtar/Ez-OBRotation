@@ -1,4 +1,4 @@
-name: Deploy to Wago
+name: Deploy to All
 
 on:
   release:
@@ -13,7 +13,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Package and Release to Wago
+      - name: Package and Release
         uses: BigWigsMods/packager@v2
         env:
+          # Le token Wago que tu as déjà
           WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+          # Le nouveau token CurseForge
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          # Optionnel : Si tu ajoutes WowInterface un jour
+          WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
