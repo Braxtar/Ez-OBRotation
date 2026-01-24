@@ -1,14 +1,9 @@
 ## Interface: 120000
-## Title: Ez-OB Rotation
-## Notes: One Button Rotation with keybinds
-## Author: You
-## Version: 2.0
+## Title: Ez-OBRotation (Midnight Beta)
+## Notes: One Button Rotation with keybinds.
+## Author: Braxtar
+## Version: 12.0.0-Beta1
 ## IconTexture: Interface\AddOns\Ez-OBRotation\Ez-OBRotation.jpg
 ## SavedVariables: EzOBR_Config
-## X-Wago-ID: kGryylKy
-## X-Curse-Project-ID: 1443163
-
 
 Ez-OBRotation.lua
-
-
