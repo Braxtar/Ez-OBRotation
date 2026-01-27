@@ -69,17 +69,16 @@ function f:CreateMinimapButton()
     btn:SetSize(32, 32)
     btn:SetFrameLevel(8)
     
-    local icon = btn:CreateTexture(nil, "BACKGROUND")
-    icon:SetTexture(iconPath)
-    icon:SetSize(22, 22)
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(20, 20)
     icon:SetPoint("CENTER")
+    -- Use a reliable WoW icon - the custom icon path may not exist
+    icon:SetTexture("Interface\\Icons\\Trade_Engineering")
     
     local border = btn:CreateTexture(nil, "OVERLAY")
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
     border:SetSize(52, 52)
     border:SetPoint("TOPLEFT")
-    
-    btn:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
     local function UpdatePos()
         local angle = math.rad(EzOBR_Config.minimapPos)
@@ -100,8 +99,8 @@ function f:CreateMinimapButton()
         end
     end)
     
-    btn:RegisterForClicks("AnyUp")
-    btn:SetScript("OnClick", function() 
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    btn:SetScript("OnClick", function(self, button) 
         if not settingsCategory then 
             Settings.OpenToCategory("Ez-OBRotation") 
             return 
@@ -256,6 +255,8 @@ function f:StartDetective()
         if slot >= 37 and slot <= 48 then return "MULTIACTIONBAR4BUTTON"..(slot-36) end
         if slot >= 73 and slot <= 84 then return "MULTIACTIONBAR5BUTTON"..(slot-72) end
         if slot >= 85 and slot <= 96 then return "MULTIACTIONBAR6BUTTON"..(slot-84) end
+        if slot >= 97 and slot <= 108 then return "MULTIACTIONBAR7BUTTON"..(slot-96) end
+        if slot >= 109 and slot <= 120 then return "MULTIACTIONBAR8BUTTON"..(slot-108) end
         return nil
     end
 
@@ -276,10 +277,17 @@ function f:StartDetective()
 
     local blizzardButtons = {}
     local function CacheBlizzardButtons()
+        -- FIX: Added MultiBar7Button and MultiBar8Button for all action bars
         local barPrefixes = {
-            "ActionButton", "MultiBarBottomLeftButton", "MultiBarBottomRightButton",
-            "MultiBarRightButton", "MultiBarLeftButton", "MultiBar5Button",
-            "MultiBar6Button", "MultiBar7Button",
+            "ActionButton", 
+            "MultiBarBottomLeftButton", 
+            "MultiBarBottomRightButton",
+            "MultiBarRightButton", 
+            "MultiBarLeftButton", 
+            "MultiBar5Button",
+            "MultiBar6Button", 
+            "MultiBar7Button",  -- Added Bar 7
+            "MultiBar8Button",  -- Added Bar 8
         }
         for _, prefix in ipairs(barPrefixes) do
             for i = 1, 12 do
@@ -321,14 +329,50 @@ function f:StartDetective()
         return nil
     end
 
+    -- Track which buttons we've hooked
+    local hookedButtons = {}
+    
     local function HideGlows(btn)
-        if btn.SpellActivationAlert then btn.SpellActivationAlert:SetAlpha(0) end
-        if btn.AssistedCombatRotationFrame then btn.AssistedCombatRotationFrame:SetAlpha(0) end
+        if btn.SpellActivationAlert then 
+            btn.SpellActivationAlert:SetAlpha(0) 
+        end
+        if btn.AssistedCombatRotationFrame then 
+            -- Set alpha to 0
+            btn.AssistedCombatRotationFrame:SetAlpha(0)
+            
+            -- Hook the frame to continuously enforce alpha=0 while our text is shown
+            if not hookedButtons[btn] then
+                hookedButtons[btn] = true
+                
+                -- Hook Show to immediately set alpha to 0
+                if btn.AssistedCombatRotationFrame.Show then
+                    hooksecurefunc(btn.AssistedCombatRotationFrame, "Show", function(self)
+                        if btn.EzOBR_Text and btn.EzOBR_Text:IsShown() then
+                            self:SetAlpha(0)
+                        end
+                    end)
+                end
+                
+                -- Hook SetAlpha to prevent Blizzard from resetting it
+                local origSetAlpha = btn.AssistedCombatRotationFrame.SetAlpha
+                btn.AssistedCombatRotationFrame.SetAlpha = function(self, alpha)
+                    if btn.EzOBR_Text and btn.EzOBR_Text:IsShown() then
+                        origSetAlpha(self, 0)
+                    else
+                        origSetAlpha(self, alpha)
+                    end
+                end
+            end
+        end
     end
 
     local function RestoreGlows(btn)
-        if btn.SpellActivationAlert then btn.SpellActivationAlert:SetAlpha(1) end
-        if btn.AssistedCombatRotationFrame then btn.AssistedCombatRotationFrame:SetAlpha(1) end
+        if btn.SpellActivationAlert then 
+            btn.SpellActivationAlert:SetAlpha(1) 
+        end
+        if btn.AssistedCombatRotationFrame then 
+            btn.AssistedCombatRotationFrame:SetAlpha(1)
+        end
     end
 
     local lastActiveButton = nil
@@ -339,7 +383,7 @@ function f:StartDetective()
         return key:gsub("SHIFT%-", "s"):gsub("CTRL%-", "c"):gsub("ALT%-", "a")
     end
 
-    C_Timer.NewTicker(0.1, function()
+    C_Timer.NewTicker(0.03, function()
         local currentButton = usingBartender and FindBartenderGlowButton() or FindBlizzardGlowButton()
 
         if lastActiveButton and lastActiveButton ~= currentButton then
@@ -353,6 +397,8 @@ function f:StartDetective()
         if not currentButton then return end
 
         local btn = currentButton
+        
+        -- Continuously enforce hiding - Blizzard may reset alpha every frame
         HideGlows(btn)
 
         if not btn.EzOBR_Text then
