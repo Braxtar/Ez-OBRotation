@@ -457,7 +457,15 @@ function f:StartDetective()
     
     local function FormatKey(key)
         if not key then return nil end
-        return key:gsub("SHIFT%-", "s"):gsub("CTRL%-", "c"):gsub("ALT%-", "a")
+        return key
+            :gsub("SHIFT%-", "S")
+            :gsub("CTRL%-", "C")
+            :gsub("ALT%-", "A")
+            :gsub("NUMPAD ", "N")
+            :gsub("MOUSE BUTTON ", "M")
+            :gsub("MOUSEWHEELDOWN", "WD")
+            :gsub("MOUSEWHEELUP", "WU")
+            :gsub("BUTTON(%d+)", "M%1")
     end
 
     C_Timer.NewTicker(0.03, function()
