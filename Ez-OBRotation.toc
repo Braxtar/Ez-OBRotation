@@ -2,7 +2,7 @@
 ## Title: Ez-OB Rotation
 ## Notes: One Button Rotation with keybinds
 ## Author: Braxtar
-## Version: 2.5
+## Version: 2.7
 ## IconTexture: Interface\AddOns\Ez-OBRotation\Ez-OBRotation.jpg
 ## SavedVariables: EzOBR_Config
 ## X-Wago-ID: kGryylKy

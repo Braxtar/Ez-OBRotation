@@ -7,6 +7,8 @@ local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("UPDATE_BINDINGS")
 f:RegisterEvent("ACTIONBAR_SLOT_CHANGED")
+f:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+f:RegisterEvent("UPDATE_BONUS_ACTIONBAR")
 
 local hotkeyCache = {}
 local cacheValid = false
@@ -169,7 +171,7 @@ f:SetScript("OnEvent", function(self, event)
         self:StartDetective()
         
         print("|cff00FF00Ez-OBRotation:|r Loaded!")
-    elseif event == "UPDATE_BINDINGS" or event == "ACTIONBAR_SLOT_CHANGED" then
+    elseif event == "UPDATE_BINDINGS" or event == "ACTIONBAR_SLOT_CHANGED" or event == "UPDATE_SHAPESHIFT_FORM" or event == "UPDATE_BONUS_ACTIONBAR" then
         InvalidateHotkeyCache()
     end
 end)
