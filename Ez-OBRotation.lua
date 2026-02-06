@@ -70,6 +70,22 @@ local function BuildHotkeyCache()
     if cacheValid then return end
     wipe(hotkeyCache)
     
+    -- Scan main action bar buttons first (handles Druid form paging)
+    -- ActionButton1-12 .action reflects the current paged slot
+    for i = 1, 12 do
+        local btn = _G["ActionButton" .. i]
+        if btn and btn.action and HasAction(btn.action) then
+            local actionType, actionID = GetActionInfo(btn.action)
+            if actionType == "spell" and actionID and not hotkeyCache[actionID] then
+                local key = GetBindingKey("ACTIONBUTTON" .. i)
+                if key and key ~= "" then
+                    hotkeyCache[actionID] = key
+                end
+            end
+        end
+    end
+    
+    -- Then scan all static slots for remaining bars
     for slot = 1, 180 do
         if HasAction(slot) then
             local actionType, actionID = GetActionInfo(slot)
@@ -94,6 +110,21 @@ local function FindKeyForSpell(spellID)
     BuildHotkeyCache()
     if hotkeyCache[spellID] then
         return hotkeyCache[spellID]
+    end
+    
+    -- Direct scan of main bar buttons (paged, e.g. Druid forms)
+    for i = 1, 12 do
+        local btn = _G["ActionButton" .. i]
+        if btn and btn.action and HasAction(btn.action) then
+            local actionType, actionID = GetActionInfo(btn.action)
+            if actionType == "spell" and actionID == spellID then
+                local key = GetBindingKey("ACTIONBUTTON" .. i)
+                if key then
+                    hotkeyCache[spellID] = key
+                    return key
+                end
+            end
+        end
     end
     
     local slots = C_ActionBar.FindSpellActionButtons(spellID)
@@ -416,30 +447,73 @@ function f:StartDetective()
         return nil
     end
 
-    local hookedButtons = {}
+    -- Find ALL buttons with active SBA (for hiding glows on all of them)
+    local function FindAllSBAButtons()
+        local results = {}
+        local barPrefixes = {
+            "ActionButton",
+            "MultiBarBottomLeftButton",
+            "MultiBarBottomRightButton",
+            "MultiBarRightButton",
+            "MultiBarLeftButton",
+            "MultiBar5Button",
+            "MultiBar6Button",
+            "MultiBar7Button",
+            "MultiBar8Button",
+        }
+        for _, prefix in ipairs(barPrefixes) do
+            for i = 1, 12 do
+                local btn = _G[prefix..i]
+                if btn and IsSBAButton(btn) then
+                    results[#results + 1] = btn
+                end
+            end
+        end
+        for i = 1, 180 do
+            local btn = _G["BT4Button"..i]
+            if btn and IsSBAButton(btn) then
+                results[#results + 1] = btn
+            end
+        end
+        return results
+    end
+
+    -- Known SBA texture FileDataIDs applied directly on buttons
+    local SBA_TEXTURE_IDS = {
+        [4613342] = true,
+        [6992986] = true,
+    }
     
     local function HideGlows(btn)
         if btn.SpellActivationAlert then
             btn.SpellActivationAlert:SetAlpha(0)
         end
+        
+        -- Hide AssistedCombatRotationFrame + contents
         if btn.AssistedCombatRotationFrame then
-            btn.AssistedCombatRotationFrame:SetAlpha(0)
-            
-            if not hookedButtons[btn] then
-                hookedButtons[btn] = true
-                local frame = btn.AssistedCombatRotationFrame
-                hooksecurefunc(frame, "Show", function(self)
-                    if btn.EzOBR_Text and btn.EzOBR_Text:IsShown() then
-                        self:SetAlpha(0)
-                    end
-                end)
-                local origSetAlpha = frame.SetAlpha
-                frame.SetAlpha = function(self, alpha)
-                    if btn.EzOBR_Text and btn.EzOBR_Text:IsShown() then
-                        origSetAlpha(self, 0)
-                    else
-                        origSetAlpha(self, alpha)
-                    end
+            local frame = btn.AssistedCombatRotationFrame
+            frame:SetAlpha(0)
+            for _, region in pairs({frame:GetRegions()}) do
+                region:SetAlpha(0)
+            end
+            for _, child in pairs({frame:GetChildren()}) do
+                child:SetAlpha(0)
+                for _, r in pairs({child:GetRegions()}) do
+                    r:SetAlpha(0)
+                end
+            end
+        end
+        
+        if btn.AssistedCombatHighlightFrame then
+            btn.AssistedCombatHighlightFrame:SetAlpha(0)
+        end
+        
+        -- Hide SBA textures on the button itself
+        for _, region in pairs({btn:GetRegions()}) do
+            if region.GetTexture then
+                local tex = region:GetTexture()
+                if tex and SBA_TEXTURE_IDS[tex] then
+                    region:SetAlpha(0)
                 end
             end
         end
@@ -450,12 +524,32 @@ function f:StartDetective()
             btn.SpellActivationAlert:SetAlpha(1)
         end
         if btn.AssistedCombatRotationFrame then
-            btn.AssistedCombatRotationFrame:SetAlpha(1)
+            local frame = btn.AssistedCombatRotationFrame
+            frame:SetAlpha(1)
+            for _, region in pairs({frame:GetRegions()}) do
+                region:SetAlpha(1)
+            end
+            for _, child in pairs({frame:GetChildren()}) do
+                child:SetAlpha(1)
+                for _, r in pairs({child:GetRegions()}) do
+                    r:SetAlpha(1)
+                end
+            end
+        end
+        if btn.AssistedCombatHighlightFrame then
+            btn.AssistedCombatHighlightFrame:SetAlpha(1)
+        end
+        for _, region in pairs({btn:GetRegions()}) do
+            if region.GetTexture then
+                local tex = region:GetTexture()
+                if tex and SBA_TEXTURE_IDS[tex] then
+                    region:SetAlpha(1)
+                end
+            end
         end
     end
 
-    local lastActiveButton = nil
-    local lastKeyText = nil
+    local lastHiddenButtons = {}
     
     local function FormatKey(key)
         if not key then return nil end
@@ -470,68 +564,79 @@ function f:StartDetective()
     end
 
     C_Timer.NewTicker(0.03, function()
-        local sbaButton = FindSBAButton()
+        local allSBA = FindAllSBAButtons()
 
-        if lastActiveButton and lastActiveButton ~= sbaButton then
-            if lastActiveButton.EzOBR_Text then
-                lastActiveButton.EzOBR_Text:Hide()
+        -- Restore glows and hide texts on buttons that are no longer SBA-active
+        local currentSet = {}
+        for _, btn in ipairs(allSBA) do
+            currentSet[btn] = true
+        end
+        for btn, _ in pairs(lastHiddenButtons) do
+            if not currentSet[btn] then
+                if btn.EzOBR_Text then
+                    btn.EzOBR_Text:Hide()
+                end
+                RestoreGlows(btn)
             end
-            RestoreGlows(lastActiveButton)
-            lastKeyText = nil
         end
 
-        lastActiveButton = sbaButton
-
-        if not sbaButton then return end
-
-        HideGlows(sbaButton)
-
-        if not sbaButton.EzOBR_Text then
-            sbaButton.EzOBR_Text = sbaButton:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-            sbaButton.EzOBR_Text:SetDrawLayer("OVERLAY", 7)
+        if #allSBA == 0 then
+            lastHiddenButtons = {}
+            return
         end
-        
-        local text = sbaButton.EzOBR_Text
-        text:Show()
-        
-        if not pcall(text.SetFont, text, EzOBR_Config.fontPath, EzOBR_Config.fontSize, "OUTLINE") then
-            text:SetFont(fontFallback, EzOBR_Config.fontSize, "OUTLINE")
+
+        -- Hide glows on ALL SBA buttons
+        lastHiddenButtons = {}
+        for _, btn in ipairs(allSBA) do
+            HideGlows(btn)
+            lastHiddenButtons[btn] = true
         end
-        text:SetTextColor(EzOBR_Config.r, EzOBR_Config.g, EzOBR_Config.b, 1)
 
-        text:ClearAllPoints()
-        local point = EzOBR_Config.anchor or "TOPRIGHT"
-        local offsets = anchorOffsets[point] or anchorOffsets.TOPRIGHT
-        text:SetPoint(point, sbaButton, point, offsets[1], offsets[2])
-
+        -- Resolve spell from any SBA button
         local spellID = nil
         
-        if sbaButton.action then
-            local actionType, id = GetActionInfo(sbaButton.action)
-            if actionType == "spell" then
-                spellID = id
-            elseif actionType == "macro" then
-                spellID = GetMacroSpell(id)
-            end
-        end
-        
-        if not spellID and sbaButton._state_action then
-            local actionType, id = GetActionInfo(sbaButton._state_action)
-            if actionType == "spell" then
-                spellID = id
-            elseif actionType == "macro" then
-                spellID = GetMacroSpell(id)
-            end
-        end
-        
-        if not spellID and sbaButton.GetAttribute then
-            local actionSlot = sbaButton:GetAttribute("action")
-            if actionSlot and actionSlot > 0 then
-                local actionType, id = GetActionInfo(actionSlot)
+        for _, btn in ipairs(allSBA) do
+            if btn.action then
+                local actionType, id = GetActionInfo(btn.action)
                 if actionType == "spell" then
                     spellID = id
+                    break
                 elseif actionType == "macro" then
                     spellID = GetMacroSpell(id)
+                    if spellID then break end
+                end
+            end
+        end
+        
+        if not spellID then
+            for _, btn in ipairs(allSBA) do
+                if btn._state_action then
+                    local actionType, id = GetActionInfo(btn._state_action)
+                    if actionType == "spell" then
+                        spellID = id
+                        break
+                    elseif actionType == "macro" then
+                        spellID = GetMacroSpell(id)
+                        if spellID then break end
+                    end
+                end
+            end
+        end
+
+        if not spellID then
+            for _, btn in ipairs(allSBA) do
+                if btn.GetAttribute then
+                    local actionSlot = btn:GetAttribute("action")
+                    if actionSlot and actionSlot > 0 then
+                        local actionType, id = GetActionInfo(actionSlot)
+                        if actionType == "spell" then
+                            spellID = id
+                            break
+                        elseif actionType == "macro" then
+                            spellID = GetMacroSpell(id)
+                            if spellID then break end
+                        end
+                    end
                 end
             end
         end
@@ -539,13 +644,131 @@ function f:StartDetective()
         if not spellID then
             spellID = GetCurrentSuggestedSpell()
         end
-        
+
         local foundKey = FindKeyForSpell(spellID)
         local formattedKey = FormatKey(foundKey) or ""
-        
-        if formattedKey ~= lastKeyText then
+
+        -- Display keybind on ALL SBA buttons
+        for _, btn in ipairs(allSBA) do
+            if not btn.EzOBR_Text then
+                btn.EzOBR_Text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                btn.EzOBR_Text:SetDrawLayer("OVERLAY", 7)
+            end
+            
+            local text = btn.EzOBR_Text
+            text:Show()
+            
+            if not pcall(text.SetFont, text, EzOBR_Config.fontPath, EzOBR_Config.fontSize, "OUTLINE") then
+                text:SetFont(fontFallback, EzOBR_Config.fontSize, "OUTLINE")
+            end
+            text:SetTextColor(EzOBR_Config.r, EzOBR_Config.g, EzOBR_Config.b, 1)
+
+            text:ClearAllPoints()
+            local point = EzOBR_Config.anchor or "TOPRIGHT"
+            local offsets = anchorOffsets[point] or anchorOffsets.TOPRIGHT
+            text:SetPoint(point, btn, point, offsets[1], offsets[2])
+            
             text:SetText(formattedKey)
-            lastKeyText = formattedKey
         end
     end)
+
+    -- Debug: dump all frames/regions on the SBA button
+    SLASH_EZOBRDEBUG1 = "/ezobrdebug"
+    SlashCmdList["EZOBRDEBUG"] = function()
+        local sbaButton = FindSBAButton()
+        if not sbaButton then
+            print("|cffFF0000No SBA button found|r")
+            return
+        end
+        local name = sbaButton:GetName() or "unnamed"
+        print("|cff00FF00=== SBA Button: " .. name .. " ===|r")
+        
+        -- Dump button's OWN regions first
+        print("|cff00FF00  --- Button's own regions ------|r")
+        local btnRegions = {sbaButton:GetRegions()}
+        for j, r in ipairs(btnRegions) do
+            local rType = r:GetObjectType()
+            local rAlpha = r:GetAlpha()
+            local rShown = r:IsShown() and "SHOWN" or "hidden"
+            local rTex = ""
+            if rType == "Texture" and r.GetTexture then
+                rTex = " tex=" .. tostring(r:GetTexture())
+            end
+            local rName = ""
+            if r.GetName and r:GetName() then
+                rName = " name=" .. r:GetName()
+            end
+            local rDL = ""
+            if r.GetDrawLayer then
+                rDL = " layer=" .. tostring(r:GetDrawLayer())
+            end
+            local vis = (r:IsShown() and rAlpha > 0) and " <<< VIS" or ""
+            print("|cffFFFF00    [" .. j .. "] " .. rType .. " " .. rShown .. " alpha=" .. rAlpha .. rTex .. rName .. rDL .. vis .. "|r")
+        end
+        
+        -- List all known SBA-related keys
+        local keys = {"AssistedCombatRotationFrame", "AssistedCombatHighlightFrame", "SpellActivationAlert"}
+        for _, key in ipairs(keys) do
+            local frame = sbaButton[key]
+            if frame then
+                local shown = frame:IsShown() and "SHOWN" or "hidden"
+                local alpha = frame:GetAlpha()
+                print("|cffFFAA00  " .. key .. ": " .. shown .. " alpha=" .. alpha .. "|r")
+                -- List regions (textures)
+                local regions = {frame:GetRegions()}
+                for j, r in ipairs(regions) do
+                    local rType = r:GetObjectType()
+                    local rAlpha = r:GetAlpha()
+                    local rShown = r:IsShown() and "SHOWN" or "hidden"
+                    local rTex = ""
+                    if rType == "Texture" and r.GetTexture then
+                        rTex = " tex=" .. tostring(r:GetTexture())
+                    end
+                    print("|cffFF00FF    region" .. j .. ": " .. rType .. " " .. rShown .. " alpha=" .. rAlpha .. rTex .. "|r")
+                end
+                -- List children
+                local children = {frame:GetChildren()}
+                for j, c in ipairs(children) do
+                    local cName = c:GetName() or "anon"
+                    local cShown = c:IsShown() and "SHOWN" or "hidden"
+                    local cAlpha = c:GetAlpha()
+                    print("|cffFF00FF    child" .. j .. ": " .. cName .. " " .. cShown .. " alpha=" .. cAlpha .. "|r")
+                end
+            else
+                print("|cff888888  " .. key .. ": nil|r")
+            end
+        end
+        
+        -- Also dump ALL children of the button itself
+        print("|cff00FF00  --- All button children ------|r")
+        local allChildren = {sbaButton:GetChildren()}
+        for j, c in ipairs(allChildren) do
+            local cName = c:GetName() or c:GetObjectType()
+            local cShown = c:IsShown() and "SHOWN" or "hidden"
+            local cAlpha = c:GetAlpha()
+            local extra = ""
+            -- For SHOWN frames, dump their regions too
+            if c:IsShown() and c:GetAlpha() > 0 then
+                extra = " <<< VISIBLE"
+                local cRegions = {c:GetRegions()}
+                for k, r in ipairs(cRegions) do
+                    local rType = r:GetObjectType()
+                    local rAlpha = r:GetAlpha()
+                    local rShown = r:IsShown() and "SHOWN" or "hidden"
+                    local rTex = ""
+                    if rType == "Texture" and r.GetTexture then
+                        rTex = " tex=" .. tostring(r:GetTexture())
+                    end
+                    print("|cffFFFF00      region" .. k .. ": " .. rType .. " " .. rShown .. " alpha=" .. rAlpha .. rTex .. "|r")
+                end
+                local cChildren = {c:GetChildren()}
+                for k, cc in ipairs(cChildren) do
+                    local ccName = cc:GetName() or cc:GetObjectType()
+                    local ccShown = cc:IsShown() and "SHOWN" or "hidden"
+                    print("|cffFFFF00      child" .. k .. ": " .. ccName .. " " .. ccShown .. " alpha=" .. cc:GetAlpha() .. "|r")
+                end
+            end
+            print("|cffAAFFAA    [" .. j .. "] " .. cName .. " " .. cShown .. " alpha=" .. cAlpha .. extra .. "|r")
+        end
+    end
 end
