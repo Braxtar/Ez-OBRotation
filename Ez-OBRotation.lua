@@ -22,7 +22,7 @@ local function ValidateFont(fontPath)
 end
 
 local defaults = {
-    fontSize = 24,
+    fontSize = 22,
     fontPath = fontFallback,
     r = 1, g = 1, b = 1,
     anchor = "TOPRIGHT",
