@@ -1,6 +1,6 @@
 ## Interface: 120000
 ## Title: Ez-OB Rotation
-## Notes: One Button Rotation with keybinds
+## Notes: One Button Rotation with keybinds | Blizzard + ElvUI + BT4 + Dominos
 ## Author: Braxtar
 ## Version: 2.9
 ## IconTexture: Interface\AddOns\Ez-OBRotation\Ez-OBRotation.jpg

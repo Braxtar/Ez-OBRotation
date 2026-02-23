@@ -22,7 +22,7 @@ local function ValidateFont(fontPath)
 end
 
 local defaults = {
-    fontSize = 22,
+    fontSize = 24,
     fontPath = fontFallback,
     r = 1, g = 1, b = 1,
     anchor = "TOPRIGHT",
@@ -122,6 +122,74 @@ local function FindKeyForSpell(spellID)
                 if key then
                     hotkeyCache[spellID] = key
                     return key
+                end
+            end
+        end
+    end
+    
+    -- Scan ElvUI/LAB buttons - they store hotkey text directly
+    for bar = 1, 10 do
+        for i = 1, 12 do
+            local btn = _G["ElvUI_Bar" .. bar .. "Button" .. i]
+            if btn and btn:IsVisible() then
+                local slot = btn.action or btn._state_action
+                if slot and HasAction(slot) then
+                    local actionType, actionID = GetActionInfo(slot)
+                    if actionType == "spell" and actionID == spellID then
+                        -- Try LAB's GetBindingText method
+                        if btn.GetBindingText then
+                            local key = btn:GetBindingText()
+                            if key and key ~= "" then
+                                hotkeyCache[spellID] = key
+                                return key
+                            end
+                        end
+                        -- Try reading the hotkey fontstring directly
+                        if btn.HotKey then
+                            local text = btn.HotKey:GetText()
+                            if text and text ~= "" and text ~= RANGE_INDICATOR then
+                                hotkeyCache[spellID] = text
+                                return text
+                            end
+                        end
+                        -- Try standard binding command as fallback
+                        local command = GetBindCommand(slot)
+                        if command then
+                            local key = GetBindingKey(command)
+                            if key then
+                                hotkeyCache[spellID] = key
+                                return key
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Scan Dominos buttons
+    for i = 1, 120 do
+        local btn = _G["DominosActionButton"..i]
+        if btn and btn:IsVisible() then
+            local slot = btn.action or btn._state_action
+            if slot and HasAction(slot) then
+                local actionType, actionID = GetActionInfo(slot)
+                if actionType == "spell" and actionID == spellID then
+                    if btn.HotKey then
+                        local text = btn.HotKey:GetText()
+                        if text and text ~= "" and text ~= RANGE_INDICATOR then
+                            hotkeyCache[spellID] = text
+                            return text
+                        end
+                    end
+                    local command = GetBindCommand(slot)
+                    if command then
+                        local key = GetBindingKey(command)
+                        if key then
+                            hotkeyCache[spellID] = key
+                            return key
+                        end
+                    end
                 end
             end
         end
@@ -412,8 +480,43 @@ function f:StartDetective()
     local function IsSBAButton(btn)
         if not btn then return false end
         if not btn:IsVisible() then return false end
+        -- Method 1: Standard Blizzard AssistedCombatRotationFrame overlay
         if btn.AssistedCombatRotationFrame and btn.AssistedCombatRotationFrame:IsShown() then
             return true
+        end
+        -- Method 2: LibActionButton / ElvUI overlay glow (SpellActivationAlert)
+        -- LAB may use SpellActivationAlert for OBR glows
+        if btn.SpellActivationAlert and btn.SpellActivationAlert:IsShown() then
+            -- Verify this is the OBR spell, not a regular proc glow
+            local obrSpell = GetCurrentSuggestedSpell()
+            if obrSpell and btn.action then
+                local actionType, actionID = GetActionInfo(btn.action)
+                if actionType == "spell" and actionID == obrSpell then
+                    return true
+                end
+            elseif obrSpell and btn._state_action then
+                local actionType, actionID = GetActionInfo(btn._state_action)
+                if actionType == "spell" and actionID == obrSpell then
+                    return true
+                end
+            end
+        end
+        -- Method 3: Fallback for LAB buttons - check if button has the OBR spell
+        -- and OBR is currently active (useful when overlay glow is skinned away)
+        if btn.action or btn._state_action then
+            local obrSpell = GetCurrentSuggestedSpell()
+            if obrSpell then
+                local slot = btn.action or btn._state_action
+                if slot then
+                    local actionType, actionID = GetActionInfo(slot)
+                    if actionType == "spell" and actionID == obrSpell then
+                        -- Check if any glow-like overlay is visible on this button
+                        if btn.overlay and btn.overlay:IsShown() then return true end
+                        -- For ElvUI LAB buttons, check for the checked/highlight state
+                        if btn.AssistedCombatHighlightFrame and btn.AssistedCombatHighlightFrame:IsShown() then return true end
+                    end
+                end
+            end
         end
         return false
     end
@@ -438,8 +541,25 @@ function f:StartDetective()
                 end
             end
         end
+        -- Bartender4 support
         for i = 1, 180 do
             local btn = _G["BT4Button"..i]
+            if btn and IsSBAButton(btn) then
+                return btn
+            end
+        end
+        -- ElvUI support (ElvUI_Bar1Button1 through ElvUI_Bar10Button12)
+        for bar = 1, 10 do
+            for i = 1, 12 do
+                local btn = _G["ElvUI_Bar" .. bar .. "Button" .. i]
+                if btn and IsSBAButton(btn) then
+                    return btn
+                end
+            end
+        end
+        -- Dominos support (DominosActionButton1-120)
+        for i = 1, 120 do
+            local btn = _G["DominosActionButton"..i]
             if btn and IsSBAButton(btn) then
                 return btn
             end
@@ -469,8 +589,25 @@ function f:StartDetective()
                 end
             end
         end
+        -- Bartender4 support
         for i = 1, 180 do
             local btn = _G["BT4Button"..i]
+            if btn and IsSBAButton(btn) then
+                results[#results + 1] = btn
+            end
+        end
+        -- ElvUI support (ElvUI_Bar1Button1 through ElvUI_Bar10Button12)
+        for bar = 1, 10 do
+            for i = 1, 12 do
+                local btn = _G["ElvUI_Bar" .. bar .. "Button" .. i]
+                if btn and IsSBAButton(btn) then
+                    results[#results + 1] = btn
+                end
+            end
+        end
+        -- Dominos support (DominosActionButton1-120)
+        for i = 1, 120 do
+            local btn = _G["DominosActionButton"..i]
             if btn and IsSBAButton(btn) then
                 results[#results + 1] = btn
             end
