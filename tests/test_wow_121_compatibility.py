@@ -9,6 +9,7 @@ ADDON_SOURCE = ROOT / "Ez-OBRotation.lua"
 
 BOOTSTRAP = r"""
 SlashCmdList = {}
+print = function() end
 __addon_frame = nil
 __ticker = nil
 __has_action_calls = 0
@@ -161,6 +162,27 @@ class Wow121CompatibilityTests(unittest.TestCase):
 
         self.runtime.frame.StartDetective(self.runtime.frame)
         self.runtime.globals["__ticker"]()
+
+        self.assertEqual(
+            0,
+            self.runtime.globals["__multibar8_visibility_checks"],
+        )
+
+    def test_ezobrdebug_does_not_scan_nonexistent_multibar8_frame(self):
+        self.runtime.lua.execute(
+            r"""
+            __multibar8_visibility_checks = 0
+            MultiBar8Button1 = {
+                IsVisible = function()
+                    __multibar8_visibility_checks = __multibar8_visibility_checks + 1
+                    return false
+                end,
+            }
+            """
+        )
+
+        self.runtime.frame.StartDetective(self.runtime.frame)
+        self.runtime.globals.SlashCmdList["EZOBRDEBUG"]()
 
         self.assertEqual(
             0,
