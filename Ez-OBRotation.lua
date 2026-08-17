@@ -54,15 +54,14 @@ end
 
 local function GetBindCommand(slot)
     if not slot then return nil end
-    if slot <= 12 then return "ACTIONBUTTON"..slot end
+    if slot >= 1 and slot <= 12 then return "ACTIONBUTTON"..slot end
     if slot >= 61 and slot <= 72 then return "MULTIACTIONBAR1BUTTON"..(slot-60) end
     if slot >= 49 and slot <= 60 then return "MULTIACTIONBAR2BUTTON"..(slot-48) end
     if slot >= 25 and slot <= 36 then return "MULTIACTIONBAR3BUTTON"..(slot-24) end
     if slot >= 37 and slot <= 48 then return "MULTIACTIONBAR4BUTTON"..(slot-36) end
-    if slot >= 73 and slot <= 84 then return "MULTIACTIONBAR5BUTTON"..(slot-72) end
-    if slot >= 85 and slot <= 96 then return "MULTIACTIONBAR6BUTTON"..(slot-84) end
-    if slot >= 97 and slot <= 108 then return "MULTIACTIONBAR7BUTTON"..(slot-96) end
-    if slot >= 109 and slot <= 120 then return "MULTIACTIONBAR8BUTTON"..(slot-108) end
+    if slot >= 145 and slot <= 156 then return "MULTIACTIONBAR5BUTTON"..(slot-144) end
+    if slot >= 157 and slot <= 168 then return "MULTIACTIONBAR6BUTTON"..(slot-156) end
+    if slot >= 169 and slot <= 180 then return "MULTIACTIONBAR7BUTTON"..(slot-168) end
     return nil
 end
 
@@ -74,7 +73,7 @@ local function BuildHotkeyCache()
     -- ActionButton1-12 .action reflects the current paged slot
     for i = 1, 12 do
         local btn = _G["ActionButton" .. i]
-        if btn and btn.action and HasAction(btn.action) then
+        if btn and btn.action and C_ActionBar.HasAction(btn.action) then
             local actionType, actionID = GetActionInfo(btn.action)
             if actionType == "spell" and actionID and not hotkeyCache[actionID] then
                 local key = GetBindingKey("ACTIONBUTTON" .. i)
@@ -87,7 +86,7 @@ local function BuildHotkeyCache()
     
     -- Then scan all static slots for remaining bars
     for slot = 1, 180 do
-        if HasAction(slot) then
+        if C_ActionBar.HasAction(slot) then
             local actionType, actionID = GetActionInfo(slot)
             local command = GetBindCommand(slot)
             local key = command and GetBindingKey(command)
@@ -115,7 +114,7 @@ local function FindKeyForSpell(spellID)
     -- Direct scan of main bar buttons (paged, e.g. Druid forms)
     for i = 1, 12 do
         local btn = _G["ActionButton" .. i]
-        if btn and btn.action and HasAction(btn.action) then
+        if btn and btn.action and C_ActionBar.HasAction(btn.action) then
             local actionType, actionID = GetActionInfo(btn.action)
             if actionType == "spell" and actionID == spellID then
                 local key = GetBindingKey("ACTIONBUTTON" .. i)
@@ -145,7 +144,7 @@ local function FindKeyForSpell(spellID)
     if spellName then
         local lowerName = spellName:lower()
         for slot = 1, 180 do
-            if HasAction(slot) then
+            if C_ActionBar.HasAction(slot) then
                 local actionType, actionID = GetActionInfo(slot)
                 if actionType == "macro" and actionID then
                     local _, _, body = GetMacroInfo(actionID)
@@ -428,7 +427,6 @@ function f:StartDetective()
             "MultiBar5Button",
             "MultiBar6Button",
             "MultiBar7Button",
-            "MultiBar8Button",
         }
         for _, prefix in ipairs(barPrefixes) do
             for i = 1, 12 do
@@ -459,7 +457,6 @@ function f:StartDetective()
             "MultiBar5Button",
             "MultiBar6Button",
             "MultiBar7Button",
-            "MultiBar8Button",
         }
         for _, prefix in ipairs(barPrefixes) do
             for i = 1, 12 do
