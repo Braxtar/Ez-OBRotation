@@ -6,6 +6,7 @@ from lupa import LuaError, LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
 ADDON_SOURCE = ROOT / "Ez-OBRotation.lua"
+ADDON_TOC = ROOT / "Ez-OBRotation.toc"
 
 BOOTSTRAP = r"""
 SlashCmdList = {}
@@ -188,6 +189,18 @@ class Wow121CompatibilityTests(unittest.TestCase):
             0,
             self.runtime.globals["__multibar8_visibility_checks"],
         )
+
+
+class TocMetadataTests(unittest.TestCase):
+    def test_retail_12_1_release_metadata(self):
+        metadata = {}
+        for line in ADDON_TOC.read_text(encoding="utf-8-sig").splitlines():
+            if line.startswith("## ") and ":" in line:
+                key, value = line[3:].split(":", 1)
+                metadata[key.strip()] = value.strip()
+
+        self.assertEqual("120100", metadata.get("Interface"))
+        self.assertEqual("3.3", metadata.get("Version"))
 
 
 if __name__ == "__main__":
